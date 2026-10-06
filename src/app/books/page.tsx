@@ -134,6 +134,7 @@ function BooksContent() {
   // Print Barcode State
   const [printingBook, setPrintingBook] = useState<Book | null>(null);
   const [printCopies, setPrintCopies] = useState(1);
+  const [printType, setPrintType] = useState<"barcode" | "qrcode" | "combo">("combo");
 
   const openEdit = (b: Book) => {
     setEditingBook(b);
@@ -631,8 +632,8 @@ function BooksContent() {
       >
         {printingBook && (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Field label="Số lượng bản tem cần in" className="w-40">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="Số lượng tem cần in">
                 <Input
                   type="number"
                   min={1}
@@ -641,9 +642,17 @@ function BooksContent() {
                   onChange={(e) => setPrintCopies(Math.max(1, parseInt(e.target.value) || 1))}
                 />
               </Field>
-              <p className="text-xs text-slate-500 pt-5">
-                Kích thước tem chuẩn 60mm x 35mm phù hợp dán gáy hoặc bìa sách.
-              </p>
+
+              <Field label="Định dạng tem in">
+                <Select
+                  value={printType}
+                  onChange={(e) => setPrintType(e.target.value as "barcode" | "qrcode" | "combo")}
+                >
+                  <option value="combo">⭐ Combo: QR Code + Barcode (Khuyên dùng)</option>
+                  <option value="qrcode">📱 Mã QR (Điện thoại quét nhanh nhất)</option>
+                  <option value="barcode">🏷️ Mã vạch Barcode 1D (Code 128)</option>
+                </Select>
+              </Field>
             </div>
 
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
@@ -656,6 +665,7 @@ function BooksContent() {
                   title={printingBook.title}
                   bookCode={printingBook.bookCode}
                   barcode={printingBook.barcode}
+                  type={printType}
                 />
               </div>
             </div>
@@ -670,6 +680,7 @@ function BooksContent() {
                     title={printingBook.title}
                     bookCode={printingBook.bookCode}
                     barcode={printingBook.barcode}
+                    type={printType}
                   />
                 ))}
               </div>

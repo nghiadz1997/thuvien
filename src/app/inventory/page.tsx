@@ -5,6 +5,7 @@ import {
   AlertCircle,
   AlertTriangle,
   ArrowLeft,
+  Camera,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
@@ -13,6 +14,7 @@ import {
   Layers,
   Package,
   Plus,
+  QrCode,
   RotateCcw,
   ScanBarcode,
   Sparkles,
@@ -32,6 +34,7 @@ import { Modal, ConfirmDialog } from "@/components/ui/Modal";
 import { Table, TBody, Td, Th, THead } from "@/components/ui/Table";
 import { EmptyState, LoadingState } from "@/components/ui/States";
 import { BarcodeScannerInput, type BarcodeScannerInputHandle } from "@/components/barcode/BarcodeScannerInput";
+import { CameraScannerModal } from "@/components/barcode/CameraScannerModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useRealtime";
 import { useBookLookup } from "@/hooks/useBookLookup";
@@ -82,6 +85,9 @@ export default function InventoryPage() {
   // Modal hủy đợt
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+
+  // Modal Camera Quét liên tục trên điện thoại
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
 
   const scannerRef = useRef<BarcodeScannerInputHandle>(null);
 
@@ -428,15 +434,25 @@ export default function InventoryPage() {
           {activeSession.status === "in_progress" && (
             <Card className="border-blue-300 ring-2 ring-blue-500/20">
               <CardHeader
-                title="Chế độ quét kiểm kê nhanh (Continuous Scan)"
-                description="Quét -> Tiếng Bíp -> Tự ghi nhận -> Sẵn sàng quét cuốn tiếp theo mà không cần chạm chuột"
+                title="Chế độ quét kiểm kê nhanh (QR & Barcode)"
+                description="Quét -> Tiếng Bíp & Rung -> Tự ghi nhận -> Sẵn sàng quét cuốn tiếp theo mà không cần chạm chuột"
                 icon={<ScanBarcode className="h-5 w-5 text-blue-600" />}
+                actions={
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    icon={<Camera className="h-4 w-4" />}
+                    onClick={() => setCameraModalOpen(true)}
+                  >
+                    Mở Camera Điện Thoại
+                  </Button>
+                }
               />
-              <CardBody>
+              <CardBody className="space-y-3">
                 <BarcodeScannerInput
                   ref={scannerRef}
                   onScan={handleScanInventory}
-                  placeholder="Hướng máy quét vào mã vạch sách để kiểm kê..."
+                  placeholder="Hướng máy quét hoặc camera vào mã QR / Barcode sách để kiểm kê..."
                   keepFocus={true}
                   duplicateCooldownMs={800}
                 />
@@ -592,6 +608,29 @@ export default function InventoryPage() {
         loading={cancelling}
         message="Bạn có chắc chắn muốn hủy đợt kiểm kê này? Dữ liệu quét đợt này sẽ không được tính vào lịch sử hoàn thành."
       />
+
+      {/* Camera Scanner Modal (Quét liên tục cho điện thoại) */}
+      <CameraScannerModal
+        open={cameraModalOpen}
+        onClose={() => setCameraModalOpen(false)}
+        onScan={handleScanInventory}
+        continuous={true}
+        title={`Camera Kiểm Kê Sách (${activeSession?.name || "Đợt kiểm kê"})`}
+      />
+
+      {/* Floating Action Button trên giao diện điện thoại */}
+      {activeSession?.status === "in_progress" && !cameraModalOpen && (
+        <div className="fixed bottom-6 right-6 z-30 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setCameraModalOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-blue-600 px-5 py-3.5 text-sm font-bold text-white shadow-2xl active:scale-95 transition-transform ring-4 ring-blue-600/30"
+          >
+            <Camera className="h-5 w-5" />
+            <span>Quét Camera</span>
+          </button>
+        </div>
+      )}
     </AppShell>
   );
 }

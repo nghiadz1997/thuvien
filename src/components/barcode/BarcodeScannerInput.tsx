@@ -1,11 +1,12 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type KeyboardEvent } from "react";
-import { Loader2, ScanBarcode } from "lucide-react";
+import { Camera, Loader2, ScanBarcode, QrCode } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/utils/cn";
 import { errorMessage } from "@/utils/errors";
 import { beepError, beepSuccess, beepWarning } from "@/utils/sound";
+import { CameraScannerModal } from "./CameraScannerModal";
 
 export interface BarcodeScannerInputHandle {
   focus: () => void;
@@ -27,6 +28,8 @@ export interface BarcodeScannerInputProps {
   duplicateCooldownMs?: number;
   /** Tự gửi khi máy quét không gửi Enter (nhận diện gõ rất nhanh rồi dừng) */
   autoSubmitWithoutEnter?: boolean;
+  /** Hiển thị nút quét bằng Camera điện thoại / Laptop */
+  showCameraBtn?: boolean;
   disabled?: boolean;
   sound?: boolean;
   size?: "md" | "lg";
@@ -38,21 +41,18 @@ const IDLE_SUBMIT_MS = 120; // debounce: sau 120ms không có ký tự mới th�
 const MIN_CODE_LENGTH = 3;
 
 /**
- * Ô nhập dùng chung cho máy quét mã vạch USB dạng Keyboard HID.
- * - Tự focus, xử lý khi nhận Enter (hoặc tự nhận diện khi máy quét không gửi Enter)
- * - Chống quét trùng quá nhanh, khóa khi đang xử lý
- * - Beep + toast, tự focus lại sau khi xử lý
- * - Vẫn cho phép nhập tay rồi bấm Enter
+ * Ô nhập dùng chung cho máy quét mã vạch USB HID và Camera điện thoại (QR + Barcode).
  */
 export const BarcodeScannerInput = forwardRef<BarcodeScannerInputHandle, BarcodeScannerInputProps>(function BarcodeScannerInput(
   {
     onScan,
-    placeholder = "Quét mã vạch hoặc nhập mã rồi nhấn Enter...",
+    placeholder = "Quét mã vạch, mã QR hoặc nhập rồi nhấn Enter...",
     label,
     autoFocus = true,
     keepFocus = false,
     duplicateCooldownMs = 1500,
     autoSubmitWithoutEnter = true,
+    showCameraBtn = true,
     disabled,
     sound = true,
     size = "lg",
@@ -64,6 +64,7 @@ export const BarcodeScannerInput = forwardRef<BarcodeScannerInputHandle, Barcode
   const [value, setValue] = useState("");
   const [processing, setProcessing] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
   const processingRef = useRef(false);
   const lastScanRef = useRef<{ code: string; at: number }>({ code: "", at: 0 });
   const keyTimesRef = useRef<number[]>([]);
@@ -191,22 +192,43 @@ export const BarcodeScannerInput = forwardRef<BarcodeScannerInputHandle, Barcode
           autoCapitalize="off"
           spellCheck={false}
           inputMode="text"
-          aria-label={label ?? "Ô quét mã vạch"}
+          aria-label={label ?? "Ô quét mã"}
           className={cn(
             "w-full bg-transparent px-3 font-mono tracking-wide text-slate-900 placeholder:font-sans placeholder:tracking-normal placeholder:text-slate-400 focus:outline-none",
             size === "lg" ? "h-12 text-base" : "h-10 text-sm",
           )}
         />
-        <span
-          className={cn(
-            "mr-3 hidden items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium sm:inline-flex",
-            focused ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500",
+        <div className="flex items-center gap-1.5 pr-2">
+          {showCameraBtn && (
+            <button
+              type="button"
+              onClick={() => setCameraModalOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 active:scale-95 transition-all shadow-sm"
+              title="Mở camera điện thoại quét mã QR / Barcode"
+            >
+              <Camera className="h-4 w-4 text-blue-600" />
+              <span className="hidden sm:inline">Quét Camera</span>
+            </button>
           )}
-        >
-          <span className={cn("h-1.5 w-1.5 rounded-full", focused ? "bg-emerald-500" : "bg-slate-400")} />
-          {processing ? "Đang xử lý" : focused ? "Sẵn sàng quét" : "Bấm để quét"}
-        </span>
+
+          <span
+            className={cn(
+              "hidden items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium lg:inline-flex",
+              focused ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500",
+            )}
+          >
+            <span className={cn("h-1.5 w-1.5 rounded-full", focused ? "bg-emerald-500" : "bg-slate-400")} />
+            {processing ? "Đang xử lý" : focused ? "Sẵn sàng quét" : "Bấm để quét"}
+          </span>
+        </div>
       </div>
+
+      <CameraScannerModal
+        open={cameraModalOpen}
+        onClose={() => setCameraModalOpen(false)}
+        onScan={submit}
+        continuous={false}
+      />
     </div>
   );
 });
