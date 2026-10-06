@@ -1,0 +1,88 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDocExists() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isUserActive() {
+      return isSignedIn() && (!userDocExists() || getUserData().get('status', 'active') == 'active');
+    }
+
+    function getRole() {
+      return userDocExists() ? getUserData().get('role', 'admin') : 'admin';
+    }
+
+    function isAdmin() {
+      return isUserActive() && getRole() == 'admin';
+    }
+
+    function isLibrarian() {
+      return isUserActive() && (getRole() == 'admin' || getRole() == 'librarian');
+    }
+
+    // Đọc: cho phép toàn bộ người dùng đã xác thực
+    match /{document=**} {
+      allow read: if isSignedIn();
+    }
+
+    // Settings
+    match /settings/{docId} {
+      allow write: if isSignedIn();
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow write: if isSignedIn();
+    }
+
+    // Books
+    match /books/{bookId} {
+      allow write: if isSignedIn();
+    }
+
+    // Categories
+    match /categories/{categoryId} {
+      allow write: if isSignedIn();
+    }
+
+    // Borrowers
+    match /borrowers/{borrowerId} {
+      allow write: if isSignedIn();
+    }
+
+    // Loans
+    match /loans/{loanId} {
+      allow write: if isSignedIn();
+    }
+
+    // Transactions (Audit Log - cho phép tạo/xóa, không cho sửa)
+    match /transactions/{transactionId} {
+      allow create, delete: if isSignedIn();
+      allow update: if false;
+    }
+
+    // Inventory Sessions
+    match /inventorySessions/{sessionId} {
+      allow write: if isSignedIn();
+      match /items/{itemId} {
+        allow write: if isSignedIn();
+      }
+    }
+
+    // Counters (atomic bookCode / borrowerCode)
+    match /counters/{counterId} {
+      allow read, write: if isSignedIn();
+    }
+  }
+}
