@@ -35,6 +35,7 @@ import { useBooks, useCategories, useSettings } from "@/hooks/useRealtime";
 import { useTable } from "@/hooks/useTable";
 import { useAuth } from "@/hooks/useAuth";
 import { deleteBook, updateBook, type BookUpdateInput } from "@/services/book.service";
+import { printIsolatedBarcodeLabels, downloadLabelImage } from "@/utils/printLabel";
 import { exportExcel, todayStamp } from "@/utils/excel";
 import { formatDate, formatNumber, fromInputDate, toInputDate } from "@/utils/format";
 import { matchesSearch } from "@/utils/text";
@@ -232,7 +233,25 @@ function BooksContent() {
   };
 
   const handlePrint = () => {
-    window.print();
+    if (!printingBook) return;
+    printIsolatedBarcodeLabels({
+      schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+      title: printingBook.title,
+      bookCode: printingBook.bookCode,
+      barcode: printingBook.barcode,
+      copies: printCopies,
+    });
+  };
+
+  const handleDownloadPng = () => {
+    if (!printingBook) return;
+    downloadLabelImage({
+      schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+      title: printingBook.title,
+      bookCode: printingBook.bookCode,
+      barcode: printingBook.barcode,
+    });
+    toast.success("Đã lưu ảnh tem Barcode (PNG) về máy!");
   };
 
   return (
@@ -620,14 +639,23 @@ function BooksContent() {
         title="In tem mã vạch Code 128"
         size="md"
         footer={
-          <>
-            <Button variant="outline" onClick={() => setPrintingBook(null)}>
-              Đóng
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <Button
+              variant="outline"
+              icon={<Download className="h-4 w-4 text-emerald-600" />}
+              onClick={handleDownloadPng}
+            >
+              Lưu ảnh tem (PNG)
             </Button>
-            <Button variant="primary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
-              In tem ngay
-            </Button>
-          </>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setPrintingBook(null)}>
+                Đóng
+              </Button>
+              <Button variant="primary" icon={<Printer className="h-4 w-4" />} onClick={handlePrint}>
+                In tem ngay
+              </Button>
+            </div>
+          </div>
         }
       >
         {printingBook && (

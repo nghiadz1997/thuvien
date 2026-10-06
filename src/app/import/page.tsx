@@ -6,6 +6,7 @@ import {
   AlertCircle,
   BookPlus,
   CheckCircle2,
+  Download,
   FileSpreadsheet,
   PackageCheck,
   PackagePlus,
@@ -31,6 +32,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBooks, useCategories, useSettings } from "@/hooks/useRealtime";
 import { useBookLookup } from "@/hooks/useBookLookup";
 import { createBook, importStock } from "@/services/book.service";
+import { printIsolatedBarcodeLabels, downloadLabelImage } from "@/utils/printLabel";
 import { exportExcel, readExcel } from "@/utils/excel";
 import { errorMessage } from "@/utils/errors";
 import { toInputDate } from "@/utils/format";
@@ -792,14 +794,45 @@ export default function ImportPage() {
         title="Tạo sách thành công — In tem Barcode"
         size="md"
         footer={
-          <>
-            <Button variant="outline" onClick={() => setCreatedBookForPrint(null)}>
-              Đóng
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <Button
+              variant="outline"
+              icon={<Download className="h-4 w-4 text-emerald-600" />}
+              onClick={() => {
+                if (!createdBookForPrint) return;
+                downloadLabelImage({
+                  schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+                  title: createdBookForPrint.title,
+                  bookCode: createdBookForPrint.bookCode,
+                  barcode: createdBookForPrint.barcode,
+                });
+                toast.success("Đã tải ảnh tem Barcode (PNG)!");
+              }}
+            >
+              Lưu ảnh tem (PNG)
             </Button>
-            <Button variant="primary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
-              In tem ngay
-            </Button>
-          </>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setCreatedBookForPrint(null)}>
+                Đóng
+              </Button>
+              <Button
+                variant="primary"
+                icon={<Printer className="h-4 w-4" />}
+                onClick={() => {
+                  if (!createdBookForPrint) return;
+                  printIsolatedBarcodeLabels({
+                    schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+                    title: createdBookForPrint.title,
+                    bookCode: createdBookForPrint.bookCode,
+                    barcode: createdBookForPrint.barcode,
+                    copies: 1,
+                  });
+                }}
+              >
+                In tem ngay
+              </Button>
+            </div>
+          </div>
         }
       >
         {createdBookForPrint && (
