@@ -134,7 +134,7 @@ function BooksContent() {
   // Print Barcode State
   const [printingBook, setPrintingBook] = useState<Book | null>(null);
   const [printCopies, setPrintCopies] = useState(1);
-  const [printType, setPrintType] = useState<"barcode" | "qrcode" | "combo">("combo");
+  const [printType, setPrintType] = useState<"barcode" | "qrcode" | "combo">("barcode");
 
   const openEdit = (b: Book) => {
     setEditingBook(b);

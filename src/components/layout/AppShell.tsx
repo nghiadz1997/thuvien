@@ -2,18 +2,35 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { AlertTriangle, ShieldAlert } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  AlertTriangle,
+  BookOpen,
+  ClipboardCheck,
+  LayoutDashboard,
+  Repeat,
+  ShieldAlert,
+  Users,
+} from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { LoadingState } from "@/components/ui/States";
 import { Button } from "@/components/ui/Button";
 
+const MOBILE_NAV_ITEMS = [
+  { href: "/dashboard", label: "Tổng quan", icon: LayoutDashboard },
+  { href: "/inventory", label: "Kiểm kê", icon: ClipboardCheck },
+  { href: "/circulation", label: "Mượn trả", icon: Repeat },
+  { href: "/books", label: "Kho sách", icon: BookOpen },
+  { href: "/borrowers", label: "Bạn đọc", icon: Users },
+];
+
 export function AppShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { status, profile, error } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   // Chuyển hướng an toàn bên trong useEffect khi đã xác nhận đăng xuất
   useEffect(() => {
@@ -86,7 +103,35 @@ export function AppShell({ children }: { children: ReactNode }) {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex flex-1 flex-col lg:pl-64">
         <Header onMenu={() => setSidebarOpen(true)} />
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="flex-1 p-3.5 sm:p-6 lg:p-8 pb-24 lg:pb-8">{children}</main>
+
+        {/* Thanh Điều Hướng Đáy Màn Hình Dành Riêng Cho Điện Thoại (Mobile App Navigation Bar) */}
+        <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1.5 flex items-center justify-around shadow-[0_-4px_20px_rgba(0,0,0,0.06)] lg:hidden">
+          {MOBILE_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex flex-col items-center justify-center min-w-[60px] py-1 px-1.5 rounded-xl transition-all ${
+                  isActive
+                    ? "text-blue-600 font-bold scale-105"
+                    : "text-slate-500 font-medium hover:text-slate-900 active:scale-95"
+                }`}
+              >
+                <div
+                  className={`p-1 rounded-lg transition-colors ${
+                    isActive ? "bg-blue-50 text-blue-600" : "bg-transparent text-slate-500"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                </div>
+                <span className="text-[10px] tracking-tight mt-0.5">{item.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
       </div>
     </div>
   );

@@ -460,16 +460,16 @@ export default function InventoryPage() {
             </Card>
           )}
 
-          {/* Bảng Chi Tiết Kết Quả Kiểm Kê */}
+          {/* Bảng Chi Tiết Kết Quả Kiểm Kê & Dạng Thẻ Điện Thoại */}
           <Card>
             <CardHeader
               title="Chi tiết đối soát theo đầu sách"
               description="Bảng so sánh số lượng sách thực tế và lý thuyết"
               actions={
-                <div className="flex items-center gap-1 text-xs">
+                <div className="flex items-center gap-1.5 text-xs overflow-x-auto pb-1 max-w-full">
                   <button
                     onClick={() => setFilterTab("ALL")}
-                    className={`px-3 py-1 rounded-lg font-medium transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
                       filterTab === "ALL" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
@@ -477,24 +477,24 @@ export default function InventoryPage() {
                   </button>
                   <button
                     onClick={() => setFilterTab("MISSING")}
-                    className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                      filterTab === "MISSING" ? "bg-red-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                      filterTab === "MISSING" ? "bg-red-600 text-white shadow-sm" : "bg-red-50 text-red-700 hover:bg-red-100"
                     }`}
                   >
                     Thiếu ({result.missing.length})
                   </button>
                   <button
                     onClick={() => setFilterTab("EXTRA")}
-                    className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                      filterTab === "EXTRA" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                      filterTab === "EXTRA" ? "bg-amber-600 text-white shadow-sm" : "bg-amber-50 text-amber-700 hover:bg-amber-100"
                     }`}
                   >
                     Dư ({result.extra.length})
                   </button>
                   <button
                     onClick={() => setFilterTab("MATCH")}
-                    className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                      filterTab === "MATCH" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors ${
+                      filterTab === "MATCH" ? "bg-emerald-600 text-white shadow-sm" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                     }`}
                   >
                     Khớp ({result.rows.filter((r) => r.diff === 0 && r.known).length})
@@ -502,7 +502,64 @@ export default function InventoryPage() {
                 </div>
               }
             />
-            <div className="overflow-x-auto">
+
+            {/* Dạng thẻ trên điện thoại (Mobile Card View) */}
+            <div className="sm:hidden p-3 space-y-2.5 bg-slate-50/50">
+              {displayedRows.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400">Không có sách nào trong mục này.</div>
+              ) : (
+                displayedRows.map((r) => (
+                  <div
+                    key={r.bookId}
+                    className={`rounded-xl border p-3.5 bg-white shadow-sm transition-all ${
+                      r.diff === 0
+                        ? "border-emerald-200 bg-emerald-50/20"
+                        : r.diff < 0
+                          ? "border-red-200 bg-red-50/20"
+                          : "border-amber-200 bg-amber-50/20"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-xs text-slate-900 leading-snug line-clamp-2">
+                          {r.title}
+                        </h4>
+                        <p className="font-mono text-[11px] text-blue-600 font-semibold mt-0.5">
+                          {r.barcode}
+                        </p>
+                      </div>
+                      <div className="shrink-0">
+                        {r.diff === 0 ? (
+                          <Badge color="green">Khớp đủ</Badge>
+                        ) : r.diff < 0 ? (
+                          <Badge color="red">Thiếu {-r.diff}</Badge>
+                        ) : (
+                          <Badge color="amber">Dư +{r.diff}</Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-slate-50 p-2 text-center text-xs border border-slate-100">
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Cần có</span>
+                        <strong className="text-slate-800 text-sm">{r.expected}</strong>
+                      </div>
+                      <div className="border-x border-slate-200">
+                        <span className="text-[10px] text-slate-400 block">Đã quét</span>
+                        <strong className="text-blue-600 text-sm font-bold">{r.scanned}</strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 block">Đang mượn</span>
+                        <strong className="text-slate-600 text-sm">{r.borrowed}</strong>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Dạng bảng trên máy tính (Desktop Table View) */}
+            <div className="hidden sm:block overflow-x-auto">
               <Table>
                 <THead>
                   <tr>
@@ -518,7 +575,7 @@ export default function InventoryPage() {
                     <tr key={r.bookId} className="hover:bg-slate-50">
                       <Td className="max-w-[280px]">
                         <p className="font-semibold text-xs text-slate-900 line-clamp-1">{r.title}</p>
-                        <p className="font-mono text-[10px] text-blue-600">{r.barcode}</p>
+                        <p className="font-mono text-[10px] text-blue-600 font-medium">{r.barcode}</p>
                       </Td>
                       <Td className="text-right font-medium text-xs text-slate-700">{r.expected}</Td>
                       <Td className="text-right font-bold text-xs text-blue-700">{r.scanned}</Td>
