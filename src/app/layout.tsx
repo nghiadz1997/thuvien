@@ -4,7 +4,12 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Quản lý Thư viện | Cao đẳng Bách khoa Nam Sài Gòn",
-  description: "Hệ thống quản lý thư viện nội bộ",
+  description: "Hệ thống quản lý thư viện số - Trường Cao Đẳng Bách Khoa Nam Sài Gòn",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export const viewport: Viewport = {

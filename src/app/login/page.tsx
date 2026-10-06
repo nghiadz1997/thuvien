@@ -125,14 +125,19 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-4">
       <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl transition-all">
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-center text-white">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur shadow-inner mb-3">
-            <Library className="h-8 w-8 text-white" />
+        <div className="bg-gradient-to-r from-blue-700 via-blue-600 to-indigo-700 p-6 text-center text-white">
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-white p-2 shadow-lg mb-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Logo Cao Đẳng Bách Khoa Nam Sài Gòn"
+              className="h-full w-full object-contain"
+            />
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-blue-100">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-blue-100">
             TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN
           </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">Hệ Thống Quản Lý Thư Viện</h1>
+          <h1 className="mt-1 text-2xl font-black tracking-tight">Hệ Thống Quản Lý Thư Viện</h1>
           <p className="mt-1 text-xs text-blue-100">Đăng nhập tài khoản cán bộ / thủ thư</p>
         </div>
 

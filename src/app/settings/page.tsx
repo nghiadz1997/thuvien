@@ -174,6 +174,30 @@ export default function SettingsPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader
+              title="Logo & Nhận diện thương hiệu"
+              description="Biểu trưng chính thức của trường"
+              icon={<Building2 className="h-5 w-5 text-blue-600" />}
+            />
+            <CardBody className="flex flex-col items-center justify-center p-6 text-center">
+              <div className="flex h-28 w-28 items-center justify-center rounded-2xl bg-slate-50 p-2 shadow-sm border border-slate-200">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/logo.png"
+                  alt="Logo Cao Đẳng Bách Khoa Nam Sài Gòn"
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <p className="mt-3 text-xs font-bold text-slate-800 uppercase">
+                {form.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN"}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Hiển thị trên Sidebar, Màn hình đăng nhập, Tem in và Báo cáo
+              </p>
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader
               title="Dữ liệu mẫu (Demo Data)"
               description="Dùng khi triển khai cơ sở dữ liệu trống để kiểm thử"
               icon={<Database className="h-5 w-5 text-indigo-600" />}

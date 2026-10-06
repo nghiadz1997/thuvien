@@ -65,12 +65,15 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       >
         <div className="flex h-16 items-center justify-between gap-2 border-b border-slate-100 px-4">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5" onClick={onClose}>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
-              <Library className="h-5 w-5" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo.png"
+              alt="Logo Cao Đẳng Bách Khoa Nam Sài Gòn"
+              className="h-10 w-10 shrink-0 object-contain drop-shadow-sm"
+            />
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-slate-900">{settings.libraryName}</p>
-              <p className="truncate text-[11px] text-slate-500">Quản lý thư viện</p>
+              <p className="truncate text-[11px] text-slate-500 font-medium">Bách Khoa Nam Sài Gòn</p>
             </div>
           </Link>
           <button onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 lg:hidden" aria-label="Đóng menu">
