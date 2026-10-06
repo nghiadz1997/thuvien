@@ -12,6 +12,7 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
+  Download,
   Edit,
   History,
   Info,
@@ -38,6 +39,7 @@ import { BarcodeSvg } from "@/components/barcode/BarcodeSvg";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks, useCategories, useSettings } from "@/hooks/useRealtime";
 import { useAsync } from "@/hooks/useAsync";
+import { printIsolatedBarcodeLabels, downloadLabelImage, downloadStandaloneQRCode } from "@/utils/printLabel";
 import {
   adjustStock,
   deleteBook,
@@ -95,6 +97,7 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
   // In tem mã vạch
   const [printModal, setPrintModal] = useState(false);
   const [printCopies, setPrintCopies] = useState(1);
+  const [printType, setPrintType] = useState<"combo" | "qrcode" | "barcode">("combo");
 
   // Xóa sách
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -445,52 +448,105 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
       <Modal
         open={printModal}
         onClose={() => setPrintModal(false)}
-        title="In tem mã vạch"
+        title="In & Lưu tem nhãn sách (Barcode / QR Code)"
         size="md"
         footer={
-          <>
-            <Button variant="outline" onClick={() => setPrintModal(false)}>
-              Đóng
-            </Button>
-            <Button variant="primary" icon={<Printer className="h-4 w-4" />} onClick={() => window.print()}>
-              In tem ngay
-            </Button>
-          </>
+          <div className="flex flex-wrap items-center justify-between gap-2 w-full">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                icon={<Download className="h-4 w-4 text-emerald-600" />}
+                onClick={async () => {
+                  if (!book) return;
+                  await downloadLabelImage({
+                    schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+                    title: book.title,
+                    bookCode: book.bookCode,
+                    barcode: book.barcode,
+                    type: printType,
+                  });
+                  toast.success("Đã tải ảnh tem (PNG)!");
+                }}
+              >
+                Lưu ảnh tem (PNG)
+              </Button>
+              <Button
+                variant="outline"
+                icon={<Download className="h-4 w-4 text-blue-600" />}
+                onClick={async () => {
+                  if (!book) return;
+                  await downloadStandaloneQRCode({
+                    title: book.title,
+                    bookCode: book.bookCode,
+                    barcode: book.barcode,
+                  });
+                  toast.success("Đã lưu riêng mã QR (PNG)!");
+                }}
+              >
+                Lưu riêng mã QR
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setPrintModal(false)}>
+                Đóng
+              </Button>
+              <Button
+                variant="primary"
+                icon={<Printer className="h-4 w-4" />}
+                onClick={async () => {
+                  if (!book) return;
+                  await printIsolatedBarcodeLabels({
+                    schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+                    title: book.title,
+                    bookCode: book.bookCode,
+                    barcode: book.barcode,
+                    copies: printCopies,
+                    type: printType,
+                  });
+                }}
+              >
+                In tem ngay
+              </Button>
+            </div>
+          </div>
         }
       >
         <div className="space-y-4">
-          <Field label="Số lượng bản tem cần in" className="w-40">
-            <Input
-              type="number"
-              min={1}
-              max={100}
-              value={printCopies}
-              onChange={(e) => setPrintCopies(Math.max(1, parseInt(e.target.value) || 1))}
-            />
-          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label="Số lượng tem cần in">
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={printCopies}
+                onChange={(e) => setPrintCopies(Math.max(1, parseInt(e.target.value) || 1))}
+              />
+            </Field>
+
+            <Field label="Định dạng tem in & lưu">
+              <Select
+                value={printType}
+                onChange={(e) => setPrintType(e.target.value as "barcode" | "qrcode" | "combo")}
+              >
+                <option value="combo">⭐ Combo: QR Code + Barcode (Khuyên dùng)</option>
+                <option value="qrcode">📱 Mã QR (Điện thoại quét nhanh nhất)</option>
+                <option value="barcode">🏷️ Mã vạch Barcode 1D (Code 128)</option>
+              </Select>
+            </Field>
+          </div>
 
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 text-center">
+              Bản xem trước tem in
+            </p>
             <div className="flex justify-center">
               <BarcodeLabel
                 schoolName={settings.schoolName}
                 title={book.title}
                 bookCode={book.bookCode}
                 barcode={book.barcode}
+                type={printType}
               />
-            </div>
-          </div>
-
-          <div className="hidden print:block print:fixed print:inset-0 print:bg-white print:p-4 print:z-50">
-            <div className="grid grid-cols-3 gap-3">
-              {Array.from({ length: printCopies }).map((_, i) => (
-                <BarcodeLabel
-                  key={i}
-                  schoolName={settings.schoolName}
-                  title={book.title}
-                  bookCode={book.bookCode}
-                  barcode={book.barcode}
-                />
-              ))}
             </div>
           </div>
         </div>

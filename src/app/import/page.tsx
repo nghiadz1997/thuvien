@@ -32,7 +32,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useBooks, useCategories, useSettings } from "@/hooks/useRealtime";
 import { useBookLookup } from "@/hooks/useBookLookup";
 import { createBook, importStock } from "@/services/book.service";
-import { printIsolatedBarcodeLabels, downloadLabelImage } from "@/utils/printLabel";
+import { printIsolatedBarcodeLabels, downloadLabelImage, downloadStandaloneQRCode } from "@/utils/printLabel";
 import { exportExcel, readExcel } from "@/utils/excel";
 import { errorMessage } from "@/utils/errors";
 import { toInputDate } from "@/utils/format";
@@ -71,6 +71,7 @@ export default function ImportPage() {
     bookCode: string;
     barcode: string;
   } | null>(null);
+  const [printType, setPrintType] = useState<"combo" | "qrcode" | "barcode">("combo");
 
   // Tab 2: Nhập Bổ Sung Sách Cũ
   const scannerRef = useRef<BarcodeScannerInputHandle>(null);
@@ -791,26 +792,44 @@ export default function ImportPage() {
       <Modal
         open={Boolean(createdBookForPrint)}
         onClose={() => setCreatedBookForPrint(null)}
-        title="Tạo sách thành công — In tem Barcode"
+        title="Tạo sách thành công — In & Lưu tem nhãn"
         size="md"
         footer={
           <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-            <Button
-              variant="outline"
-              icon={<Download className="h-4 w-4 text-emerald-600" />}
-              onClick={() => {
-                if (!createdBookForPrint) return;
-                downloadLabelImage({
-                  schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
-                  title: createdBookForPrint.title,
-                  bookCode: createdBookForPrint.bookCode,
-                  barcode: createdBookForPrint.barcode,
-                });
-                toast.success("Đã tải ảnh tem Barcode (PNG)!");
-              }}
-            >
-              Lưu ảnh tem (PNG)
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                icon={<Download className="h-4 w-4 text-emerald-600" />}
+                onClick={async () => {
+                  if (!createdBookForPrint) return;
+                  await downloadLabelImage({
+                    schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
+                    title: createdBookForPrint.title,
+                    bookCode: createdBookForPrint.bookCode,
+                    barcode: createdBookForPrint.barcode,
+                    type: printType,
+                  });
+                  toast.success("Đã tải ảnh tem (PNG)!");
+                }}
+              >
+                Lưu ảnh tem (PNG)
+              </Button>
+              <Button
+                variant="outline"
+                icon={<Download className="h-4 w-4 text-blue-600" />}
+                onClick={async () => {
+                  if (!createdBookForPrint) return;
+                  await downloadStandaloneQRCode({
+                    title: createdBookForPrint.title,
+                    bookCode: createdBookForPrint.bookCode,
+                    barcode: createdBookForPrint.barcode,
+                  });
+                  toast.success("Đã lưu riêng mã QR (PNG)!");
+                }}
+              >
+                Lưu riêng mã QR
+              </Button>
+            </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setCreatedBookForPrint(null)}>
                 Đóng
@@ -818,14 +837,15 @@ export default function ImportPage() {
               <Button
                 variant="primary"
                 icon={<Printer className="h-4 w-4" />}
-                onClick={() => {
+                onClick={async () => {
                   if (!createdBookForPrint) return;
-                  printIsolatedBarcodeLabels({
+                  await printIsolatedBarcodeLabels({
                     schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
                     title: createdBookForPrint.title,
                     bookCode: createdBookForPrint.bookCode,
                     barcode: createdBookForPrint.barcode,
                     copies: 1,
+                    type: printType,
                   });
                 }}
               >
@@ -838,22 +858,27 @@ export default function ImportPage() {
         {createdBookForPrint && (
           <div className="space-y-4">
             <p className="text-xs text-slate-600">
-              Đầu sách mới đã được tạo với mã <strong>{createdBookForPrint.bookCode}</strong>. Bạn có thể in tem ngay để dán lên sách.
+              Đầu sách mới đã được tạo với mã <strong>{createdBookForPrint.bookCode}</strong>. Bạn có thể in tem hoặc lưu mã QR về máy.
             </p>
+
+            <Field label="Định dạng tem in & lưu">
+              <Select
+                value={printType}
+                onChange={(e) => setPrintType(e.target.value as "barcode" | "qrcode" | "combo")}
+              >
+                <option value="combo">⭐ Combo: QR Code + Barcode (Khuyên dùng)</option>
+                <option value="qrcode">📱 Mã QR (Điện thoại quét nhanh nhất)</option>
+                <option value="barcode">🏷️ Mã vạch Barcode 1D (Code 128)</option>
+              </Select>
+            </Field>
+
             <div className="flex justify-center p-4 bg-slate-50 rounded-xl border border-dashed border-slate-300">
               <BarcodeLabel
                 schoolName={settings.schoolName}
                 title={createdBookForPrint.title}
                 bookCode={createdBookForPrint.bookCode}
                 barcode={createdBookForPrint.barcode}
-              />
-            </div>
-            <div className="hidden print:block print:fixed print:inset-0 print:bg-white print:p-4 print:z-50">
-              <BarcodeLabel
-                schoolName={settings.schoolName}
-                title={createdBookForPrint.title}
-                bookCode={createdBookForPrint.bookCode}
-                barcode={createdBookForPrint.barcode}
+                type={printType}
               />
             </div>
           </div>

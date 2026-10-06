@@ -35,7 +35,7 @@ import { useBooks, useCategories, useSettings } from "@/hooks/useRealtime";
 import { useTable } from "@/hooks/useTable";
 import { useAuth } from "@/hooks/useAuth";
 import { deleteBook, updateBook, type BookUpdateInput } from "@/services/book.service";
-import { printIsolatedBarcodeLabels, downloadLabelImage } from "@/utils/printLabel";
+import { printIsolatedBarcodeLabels, downloadLabelImage, downloadStandaloneQRCode } from "@/utils/printLabel";
 import { exportExcel, todayStamp } from "@/utils/excel";
 import { formatDate, formatNumber, fromInputDate, toInputDate } from "@/utils/format";
 import { matchesSearch } from "@/utils/text";
@@ -232,26 +232,38 @@ function BooksContent() {
     toast.success("Đã xuất file Excel thành công!");
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!printingBook) return;
-    printIsolatedBarcodeLabels({
+    await printIsolatedBarcodeLabels({
       schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
       title: printingBook.title,
       bookCode: printingBook.bookCode,
       barcode: printingBook.barcode,
       copies: printCopies,
+      type: printType,
     });
   };
 
-  const handleDownloadPng = () => {
+  const handleDownloadPng = async () => {
     if (!printingBook) return;
-    downloadLabelImage({
+    await downloadLabelImage({
       schoolName: settings.schoolName || "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
       title: printingBook.title,
       bookCode: printingBook.bookCode,
       barcode: printingBook.barcode,
+      type: printType,
     });
-    toast.success("Đã lưu ảnh tem Barcode (PNG) về máy!");
+    toast.success("Đã lưu ảnh tem (PNG) về máy!");
+  };
+
+  const handleDownloadOnlyQr = async () => {
+    if (!printingBook) return;
+    await downloadStandaloneQRCode({
+      title: printingBook.title,
+      bookCode: printingBook.bookCode,
+      barcode: printingBook.barcode,
+    });
+    toast.success("Đã lưu file ảnh Mã QR (PNG) riêng biệt!");
   };
 
   return (
@@ -636,17 +648,28 @@ function BooksContent() {
       <Modal
         open={Boolean(printingBook)}
         onClose={() => setPrintingBook(null)}
-        title="In tem mã vạch Code 128"
+        title="In & Lưu tem nhãn sách (Barcode / QR Code)"
         size="md"
         footer={
           <div className="flex flex-wrap items-center justify-between gap-2 w-full">
-            <Button
-              variant="outline"
-              icon={<Download className="h-4 w-4 text-emerald-600" />}
-              onClick={handleDownloadPng}
-            >
-              Lưu ảnh tem (PNG)
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                icon={<Download className="h-4 w-4 text-emerald-600" />}
+                onClick={handleDownloadPng}
+                title="Lưu toàn bộ mẫu tem đang chọn dưới dạng file ảnh PNG"
+              >
+                Lưu ảnh tem (PNG)
+              </Button>
+              <Button
+                variant="outline"
+                icon={<Download className="h-4 w-4 text-blue-600" />}
+                onClick={handleDownloadOnlyQr}
+                title="Lưu riêng ảnh mã QR Code 512x512 PNG"
+              >
+                Lưu riêng mã QR
+              </Button>
+            </div>
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => setPrintingBook(null)}>
                 Đóng

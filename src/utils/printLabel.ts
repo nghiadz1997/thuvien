@@ -1,42 +1,65 @@
 "use client";
 
 import JsBarcode from "jsbarcode";
+import QRCode from "qrcode";
+
+export type LabelType = "barcode" | "qrcode" | "combo";
 
 export interface PrintLabelData {
-  schoolName: string;
+  schoolName?: string;
   title: string;
   bookCode: string;
   barcode: string;
   copies?: number;
+  type?: LabelType;
 }
 
 /**
- * In riêng tem mã vạch qua iframe cách ly 100% — KHÔNG in giao diện web xung quanh
+ * In riêng tem (Barcode / QR Code / Combo) qua iframe cách ly 100% — KHÔNG in giao diện web xung quanh
  */
-export function printIsolatedBarcodeLabels({
+export async function printIsolatedBarcodeLabels({
   schoolName = "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
   title,
   bookCode,
   barcode,
   copies = 1,
+  type = "barcode",
 }: PrintLabelData) {
   const displayCode = bookCode || barcode;
 
-  // Tạo một canvas tạm thời để sinh ảnh Barcode Code 128
-  const canvas = document.createElement("canvas");
-  try {
-    JsBarcode(canvas, barcode || displayCode, {
-      format: "CODE128",
-      height: 48,
-      width: 1.8,
-      fontSize: 12,
-      displayValue: false,
-      margin: 2,
-    });
-  } catch (e) {
-    console.error("Barcode generation error:", e);
+  let barcodeDataUrl = "";
+  let qrDataUrl = "";
+
+  // Sinh ảnh Barcode 1D nếu cần
+  if (type === "barcode" || type === "combo") {
+    try {
+      const barcodeCanvas = document.createElement("canvas");
+      JsBarcode(barcodeCanvas, barcode || displayCode, {
+        format: "CODE128",
+        height: type === "combo" ? 42 : 48,
+        width: type === "combo" ? 1.5 : 1.8,
+        fontSize: 12,
+        displayValue: false,
+        margin: 2,
+      });
+      barcodeDataUrl = barcodeCanvas.toDataURL("image/png");
+    } catch (e) {
+      console.error("Barcode generation error:", e);
+    }
   }
-  const barcodeDataUrl = canvas.toDataURL("image/png");
+
+  // Sinh ảnh QR Code 2D nếu cần
+  if (type === "qrcode" || type === "combo") {
+    try {
+      qrDataUrl = await QRCode.toDataURL(barcode || displayCode, {
+        width: type === "combo" ? 120 : 160,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      });
+    } catch (e) {
+      console.error("QR Code generation error:", e);
+    }
+  }
 
   // Tạo iframe ẩn để in
   const iframe = document.createElement("iframe");
@@ -51,6 +74,30 @@ export function printIsolatedBarcodeLabels({
   const doc = iframe.contentWindow?.document;
   if (!doc) return;
 
+  // Render HTML của phần thân tem theo loại
+  const renderBody = () => {
+    if (type === "qrcode") {
+      return `
+        <div class="code-container qr-center">
+          <img class="qr-img" src="${qrDataUrl}" alt="${displayCode}" />
+        </div>
+      `;
+    }
+    if (type === "combo") {
+      return `
+        <div class="code-container combo-box">
+          <img class="qr-img-combo" src="${qrDataUrl}" alt="${displayCode}" />
+          <img class="barcode-img-combo" src="${barcodeDataUrl}" alt="${displayCode}" />
+        </div>
+      `;
+    }
+    return `
+      <div class="code-container barcode-center">
+        <img class="barcode-img" src="${barcodeDataUrl}" alt="${displayCode}" />
+      </div>
+    `;
+  };
+
   const labelsHtml = Array.from({ length: copies })
     .map(
       () => `
@@ -58,9 +105,7 @@ export function printIsolatedBarcodeLabels({
         <div class="school-name">${schoolName}</div>
         <div class="book-title">${title}</div>
         <div class="book-code">Mã: ${displayCode}</div>
-        <div class="barcode-wrapper">
-          <img class="barcode-img" src="${barcodeDataUrl}" alt="${displayCode}" />
-        </div>
+        ${renderBody()}
         <div class="barcode-text">${barcode || displayCode}</div>
       </div>
     `,
@@ -72,7 +117,7 @@ export function printIsolatedBarcodeLabels({
     <!DOCTYPE html>
     <html>
       <head>
-        <title>In Tem Mã Vạch - ${displayCode}</title>
+        <title>In Tem - ${displayCode}</title>
         <meta charset="utf-8" />
         <style>
           @page {
@@ -132,7 +177,7 @@ export function printIsolatedBarcodeLabels({
             -webkit-box-orient: vertical;
             overflow: hidden;
             line-height: 1.15;
-            margin: 1mm 0 0.5mm 0;
+            margin: 0.5mm 0;
           }
           .book-code {
             font-size: 6.5pt;
@@ -140,16 +185,38 @@ export function printIsolatedBarcodeLabels({
             font-weight: 500;
             line-height: 1;
           }
-          .barcode-wrapper {
+          .code-container {
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
             margin: 0.5mm 0;
           }
-          .barcode-img {
+          .qr-center .qr-img {
+            height: 13mm;
+            width: 13mm;
+            object-fit: contain;
+          }
+          .barcode-center .barcode-img {
             max-width: 95%;
             height: 11mm;
+            object-fit: contain;
+          }
+          .combo-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 2mm;
+            width: 100%;
+          }
+          .combo-box .qr-img-combo {
+            height: 11mm;
+            width: 11mm;
+            object-fit: contain;
+          }
+          .combo-box .barcode-img-combo {
+            height: 9mm;
+            max-width: 38mm;
             object-fit: contain;
           }
           .barcode-text {
@@ -176,17 +243,18 @@ export function printIsolatedBarcodeLabels({
     setTimeout(() => {
       document.body.removeChild(iframe);
     }, 1500);
-  }, 300);
+  }, 350);
 }
 
 /**
- * Tải ảnh tem dạng PNG chất lượng cao (300 DPI) để lưu vào máy
+ * Tải ảnh tem (Barcode / QR Code / Combo) dạng PNG chất lượng cao (300 DPI) để lưu vào máy
  */
-export function downloadLabelImage({
+export async function downloadLabelImage({
   schoolName = "TRƯỜNG CAO ĐẲNG BÁCH KHOA NAM SÀI GÒN",
   title,
   bookCode,
   barcode,
+  type = "barcode",
 }: PrintLabelData) {
   const displayCode = bookCode || barcode;
 
@@ -228,30 +296,114 @@ export function downloadLabelImage({
   ctx.font = "500 13px -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
   ctx.fillText(`Mã: ${displayCode}`, width / 2, 92);
 
-  // Dòng 4: Vẽ Barcode lên canvas
-  const barcodeCanvas = document.createElement("canvas");
-  try {
-    JsBarcode(barcodeCanvas, barcode || displayCode, {
-      format: "CODE128",
-      height: 90,
-      width: 2.5,
-      fontSize: 14,
-      displayValue: false,
-      margin: 0,
+  // Helper load image async
+  const loadImage = (src: string): Promise<HTMLImageElement> =>
+    new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = src;
     });
-    ctx.drawImage(barcodeCanvas, (width - barcodeCanvas.width) / 2, 110);
-  } catch (err) {
-    console.error("Barcode drawing error:", err);
+
+  if (type === "qrcode") {
+    // Vẽ chỉ mã QR
+    try {
+      const qrDataUrl = await QRCode.toDataURL(barcode || displayCode, {
+        width: 140,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      });
+      const qrImg = await loadImage(qrDataUrl);
+      ctx.drawImage(qrImg, (width - 130) / 2, 105, 130, 130);
+    } catch (e) {
+      console.error("QR drawing error:", e);
+    }
+  } else if (type === "combo") {
+    // Vẽ Combo: QR bên trái, Barcode bên phải
+    try {
+      // QR Code
+      const qrDataUrl = await QRCode.toDataURL(barcode || displayCode, {
+        width: 120,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      });
+      const qrImg = await loadImage(qrDataUrl);
+      ctx.drawImage(qrImg, 45, 110, 115, 115);
+
+      // Barcode
+      const barcodeCanvas = document.createElement("canvas");
+      JsBarcode(barcodeCanvas, barcode || displayCode, {
+        format: "CODE128",
+        height: 75,
+        width: 1.8,
+        fontSize: 12,
+        displayValue: false,
+        margin: 0,
+      });
+      ctx.drawImage(barcodeCanvas, 175, 130, 260, 75);
+    } catch (e) {
+      console.error("Combo drawing error:", e);
+    }
+  } else {
+    // Vẽ Barcode 1D tiêu chuẩn
+    const barcodeCanvas = document.createElement("canvas");
+    try {
+      JsBarcode(barcodeCanvas, barcode || displayCode, {
+        format: "CODE128",
+        height: 90,
+        width: 2.5,
+        fontSize: 14,
+        displayValue: false,
+        margin: 0,
+      });
+      ctx.drawImage(barcodeCanvas, (width - barcodeCanvas.width) / 2, 110);
+    } catch (err) {
+      console.error("Barcode drawing error:", err);
+    }
   }
 
   // Dòng 5: Mã text
   ctx.fillStyle = "#0f172a";
   ctx.font = "bold 17px ui-monospace, 'Cascadia Mono', Consolas, monospace";
-  ctx.fillText(barcode || displayCode, width / 2, 260);
+  ctx.textAlign = "center";
+  ctx.fillText(barcode || displayCode, width / 2, 262);
 
   // Tạo link tải file
+  const prefix = type === "qrcode" ? "Tem_QRCode" : type === "combo" ? "Tem_Combo" : "Tem_Barcode";
   const link = document.createElement("a");
-  link.download = `Tem_Barcode_${displayCode}.png`;
+  link.download = `${prefix}_${displayCode}.png`;
   link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+export async function downloadStandaloneQRCode({
+  title,
+  bookCode,
+  barcode,
+}: {
+  title?: string;
+  bookCode: string;
+  barcode?: string;
+}) {
+  const displayCode = bookCode || barcode || "CODE";
+  const targetText = barcode || bookCode || displayCode;
+  const qrDataUrl: string = await new Promise((resolve, reject) => {
+    QRCode.toDataURL(
+      targetText,
+      {
+        width: 512,
+        margin: 2,
+        errorCorrectionLevel: "H",
+      },
+      (err, url) => {
+        if (err) reject(err);
+        else resolve(url);
+      },
+    );
+  });
+
+  const link = document.createElement("a");
+  link.download = `QRCode_${displayCode}.png`;
+  link.href = qrDataUrl;
   link.click();
 }
