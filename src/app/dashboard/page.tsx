@@ -46,6 +46,7 @@ import { Button } from "@/components/ui/Button";
 import { Table, TBody, Td, Th, THead } from "@/components/ui/Table";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/States";
 import { useActiveLoans, useBooks, useCategories, useSettings } from "@/hooks/useRealtime";
+import { useAuth } from "@/hooks/useAuth";
 import { useAsync } from "@/hooks/useAsync";
 import { getRecentTransactions, getTransactionsInRange } from "@/services/transaction.service";
 import {
@@ -64,6 +65,7 @@ import type { Transaction } from "@/types";
 const PIE_COLORS = ["#2563eb", "#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#64748b"];
 
 export default function DashboardPage() {
+  const { firebaseUser, status } = useAuth();
   const { data: books, loading: loadingBooks, error: errorBooks, retry: retryBooks } = useBooks();
   const { data: categories, loading: loadingCats } = useCategories();
   const { data: loans, loading: loadingLoans } = useActiveLoans();
@@ -76,12 +78,19 @@ export default function DashboardPage() {
     return { startDate: start, endDate: end, months: monthRange(start, end) };
   }, []);
 
+  const authReady = status === "ready" && Boolean(firebaseUser);
+
   const { data: periodTx, loading: loadingTx } = useAsync<Transaction[]>(
     () => getTransactionsInRange(startDate, endDate, 3000),
-    [startDate.getTime(), endDate.getTime()],
+    [startDate.getTime(), endDate.getTime(), firebaseUser],
+    authReady,
   );
 
-  const { data: recentTx, loading: loadingRecent } = useAsync<Transaction[]>(() => getRecentTransactions(8), []);
+  const { data: recentTx, loading: loadingRecent } = useAsync<Transaction[]>(
+    () => getRecentTransactions(8),
+    [firebaseUser],
+    authReady,
+  );
 
   // Tính toán số liệu thống kê
   const summary = useMemo(() => {

@@ -8,7 +8,7 @@ import { getDb, getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
 import type { Actor } from "@/lib/firestore";
 import { can, type Permission } from "@/lib/permissions";
 import type { AppUser } from "@/types";
-import { resetAllStores } from "./useRealtime";
+import { ensureAllActiveStoresStarted, resetAllStores } from "./useRealtime";
 
 export type AuthStatus =
   | "loading"
@@ -38,7 +38,11 @@ function getCachedAuth(): CachedAuth | null {
   try {
     const raw = localStorage.getItem(AUTH_CACHE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || !parsed.user?.uid || !parsed.profile) {
+      return null;
+    }
+    return parsed as CachedAuth;
   } catch {
     return null;
   }
@@ -69,22 +73,23 @@ function clearCachedAuth() {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [cached] = useState<CachedAuth | null>(() => getCachedAuth());
-  const [status, setStatus] = useState<AuthStatus>(() => {
-    if (!isFirebaseConfigured) return "unconfigured";
-    if (cached) return "ready";
-    return "loading";
-  });
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(() => {
-    return (cached?.user as unknown as User) ?? null;
-  });
-  const [profile, setProfile] = useState<AppUser | null>(() => {
-    return cached?.profile ?? null;
-  });
+  const [status, setStatus] = useState<AuthStatus>(() =>
+    isFirebaseConfigured ? "loading" : "unconfigured",
+  );
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<AppUser | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
+
+    const cached = getCachedAuth();
+    if (cached) {
+      setFirebaseUser(cached.user as unknown as User);
+      setProfile(cached.profile);
+      setStatus(cached.profile.status === "disabled" ? "disabled" : "ready");
+    }
+
     let unsubProfile: (() => void) | null = null;
     let autoInitDone = false;
 
@@ -116,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile((prev) => prev || initialProfile);
       setStatus("ready");
       setCachedAuth(user, initialProfile);
+      ensureAllActiveStoresStarted();
 
       const userDocRef = doc(getDb(), COLLECTIONS.users, user.uid);
 

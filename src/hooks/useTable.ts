@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { toMillis, type DateLike } from "@/utils/format";
 
 export type SortDir = "asc" | "desc";
 
@@ -28,6 +29,9 @@ export function useTable<T>(rows: T[], options: UseTableOptions<T> = {}) {
       if (va === null || va === undefined || va === "") return 1;
       if (vb === null || vb === undefined || vb === "") return -1;
       if (typeof va === "number" && typeof vb === "number") return (va - vb) * factor;
+      if (typeof va === "object" && typeof vb === "object") {
+        return (toMillis(va as DateLike, 0) - toMillis(vb as DateLike, 0)) * factor;
+      }
       return String(va).localeCompare(String(vb), "vi", { numeric: true }) * factor;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

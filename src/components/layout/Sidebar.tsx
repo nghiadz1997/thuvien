@@ -82,7 +82,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {NAV_ITEMS.filter((i) => can(i.permission)).map((item) => {
-            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            const active =
+              pathname === item.href ||
+              (item.href === "/dashboard" && pathname === "/") ||
+              pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}

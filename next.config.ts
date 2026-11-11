@@ -3,11 +3,10 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   allowedDevOrigins: [
-    "localhost:3000",
-    "127.0.0.1:3000",
-    "192.168.1.166:3000",
+    "localhost",
+    "127.0.0.1",
+    "192.168.0.2",
     "192.168.1.166",
-    "192.168.1.221:3000",
     "192.168.1.221",
   ],
   images: {

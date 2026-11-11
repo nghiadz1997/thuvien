@@ -7,6 +7,7 @@ import { getDb } from "@/lib/firebase";
 import { col, snapToData } from "@/lib/firestore";
 import type { Book, Borrower, Category, Loan, Settings } from "@/types";
 import { errorMessage } from "@/utils/errors";
+import { toMillis } from "@/utils/format";
 
 export interface StoreState<T> {
   data: T;
@@ -20,6 +21,16 @@ function getLocalCache<T>(key: string, fallback: T): { data: T; hasCached: boole
     const raw = localStorage.getItem(key);
     if (!raw) return { data: fallback, hasCached: false };
     const parsed = JSON.parse(raw);
+    if (Array.isArray(fallback)) {
+      if (!Array.isArray(parsed)) return { data: fallback, hasCached: false };
+      return { data: parsed as unknown as T, hasCached: true };
+    }
+    if (typeof fallback === "object" && fallback !== null) {
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { data: fallback, hasCached: false };
+      }
+      return { data: { ...fallback, ...parsed }, hasCached: true };
+    }
     return { data: parsed, hasCached: true };
   } catch {
     return { data: fallback, hasCached: false };
@@ -42,6 +53,7 @@ function setLocalCache<T>(key: string, data: T) {
  */
 class RealtimeStore<T> {
   private state: StoreState<T>;
+  private readonly serverState: StoreState<T>;
   private listeners = new Set<() => void>();
   private unsub: Unsubscribe | null = null;
 
@@ -50,12 +62,21 @@ class RealtimeStore<T> {
     private readonly initial: T,
     private readonly start: (set: (data: T) => void, fail: (err: unknown) => void) => Unsubscribe,
   ) {
-    const cached = getLocalCache(cacheKey, initial);
-    this.state = {
-      data: cached.data,
-      loading: !cached.hasCached,
+    this.serverState = {
+      data: initial,
+      loading: true,
       error: null,
     };
+    if (typeof window !== "undefined") {
+      const cached = getLocalCache(cacheKey, initial);
+      this.state = {
+        data: cached.data,
+        loading: !cached.hasCached,
+        error: null,
+      };
+    } else {
+      this.state = this.serverState;
+    }
   }
 
   private emit(next: StoreState<T>) {
@@ -93,7 +114,15 @@ class RealtimeStore<T> {
     };
   };
 
+  ensureActiveIfNeeded() {
+    if (this.listeners.size > 0 && !this.unsub) {
+      this.ensureStarted();
+    }
+  }
+
   getSnapshot = () => this.state;
+
+  getServerSnapshot = () => this.serverState;
 
   retry = () => {
     this.unsub?.();
@@ -111,17 +140,8 @@ class RealtimeStore<T> {
   }
 }
 
-const SERVER_SNAPSHOT_CACHE = new WeakMap<object, StoreState<unknown>>();
-
 function useStore<T>(store: RealtimeStore<T>): StoreState<T> & { retry: () => void } {
-  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, () => {
-    let s = SERVER_SNAPSHOT_CACHE.get(store);
-    if (!s) {
-      s = store.getSnapshot();
-      SERVER_SNAPSHOT_CACHE.set(store, s);
-    }
-    return s as StoreState<T>;
-  });
+  const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
   return { ...state, retry: store.retry };
 }
 
@@ -148,7 +168,7 @@ const borrowersStore = new RealtimeStore<Borrower[]>("thuvien_cache_borrowers", 
 const activeLoansStore = new RealtimeStore<Loan[]>("thuvien_cache_loans", [], (set, fail) =>
   onSnapshot(
     query(col(COLLECTIONS.loans), where("status", "==", "borrowing")),
-    (snap) => set(snap.docs.map((d) => snapToData<Loan>(d)).sort((a, b) => (a.dueDate?.toMillis() ?? 0) - (b.dueDate?.toMillis() ?? 0))),
+    (snap) => set(snap.docs.map((d) => snapToData<Loan>(d)).sort((a, b) => toMillis(a.dueDate, 0) - toMillis(b.dueDate, 0))),
     fail,
   ),
 );
@@ -169,4 +189,10 @@ export const useSettings = () => useStore(settingsStore);
 
 export function resetAllStores() {
   [booksStore, categoriesStore, borrowersStore, activeLoansStore, settingsStore].forEach((s) => s.reset());
+}
+
+export function ensureAllActiveStoresStarted() {
+  [booksStore, categoriesStore, borrowersStore, activeLoansStore, settingsStore].forEach((s) =>
+    s.ensureActiveIfNeeded(),
+  );
 }

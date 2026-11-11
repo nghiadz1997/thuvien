@@ -32,7 +32,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { COLLECTIONS, ROLE_LABELS } from "@/lib/constants";
 import { col, snapToData } from "@/lib/firestore";
 import { createUserAccount, updateUserAccount, type NewUserInput } from "@/services/auth.service";
-import { formatDate } from "@/utils/format";
+import { formatDate, toMillis } from "@/utils/format";
 import { errorMessage } from "@/utils/errors";
 import type { ActiveStatus, AppUser, Role } from "@/types";
 
@@ -68,7 +68,7 @@ export default function UsersPage() {
       (snap) => {
         const list = snap.docs
           .map((d) => snapToData<AppUser>(d))
-          .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
+          .sort((a, b) => toMillis(b.createdAt, 0) - toMillis(a.createdAt, 0));
         setUsers(list);
         setLoading(false);
       },

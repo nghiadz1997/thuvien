@@ -7,15 +7,42 @@ export function formatNumber(n: number | null | undefined): string {
   return numberFmt.format(n ?? 0);
 }
 
-export function toDate(value: TS | Date | string | number | undefined): Date | null {
-  if (!value) return null;
-  if (value instanceof Date) return value;
+export type DateLike =
+  | TS
+  | Date
+  | string
+  | number
+  | { seconds?: number; nanoseconds?: number; _seconds?: number; _nanoseconds?: number }
+  | undefined;
+
+export function toDate(value: DateLike): Date | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
   if (value instanceof Timestamp) return value.toDate();
-  if (typeof value === "object" && value !== null && "toDate" in value && typeof (value as { toDate: unknown }).toDate === "function") {
-    return (value as { toDate: () => Date }).toDate();
+  if (typeof value === "object") {
+    if ("toDate" in value && typeof (value as { toDate: unknown }).toDate === "function") {
+      return (value as { toDate: () => Date }).toDate();
+    }
+    const v = value as { seconds?: number; nanoseconds?: number; _seconds?: number; _nanoseconds?: number };
+    const sec = typeof v.seconds === "number" ? v.seconds : typeof v._seconds === "number" ? v._seconds : null;
+    if (sec !== null) {
+      const ns = typeof v.nanoseconds === "number" ? v.nanoseconds : typeof v._nanoseconds === "number" ? v._nanoseconds : 0;
+      const d = new Date(sec * 1000 + Math.floor(ns / 1_000_000));
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+    return null;
   }
-  const d = new Date(value as string | number);
+  const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export function toMillis(value: DateLike, fallback = 0): number {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "object" && "toMillis" in value && typeof (value as { toMillis: unknown }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  const d = toDate(value);
+  return d ? d.getTime() : fallback;
 }
 
 export function formatDate(value: TS | Date | string | undefined): string {

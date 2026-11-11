@@ -3,7 +3,7 @@ import { COLLECTIONS, DEFAULT_SETTINGS } from "@/lib/constants";
 import { getDb } from "@/lib/firebase";
 import { col, docRef, newDocRef, snapToData, type Actor } from "@/lib/firestore";
 import type { Book, Borrower, Loan, LoanStatus, Settings } from "@/types";
-import { overdueDays } from "@/utils/format";
+import { overdueDays, toMillis } from "@/utils/format";
 import { applyDelta, countsOf } from "@/utils/integrity";
 import { logInTransaction, newTransactionRef } from "./transaction.service";
 
@@ -199,11 +199,11 @@ export async function getActiveLoansByBook(bookId: string): Promise<Loan[]> {
   );
   return snap.docs
     .map((d) => snapToData<Loan>(d))
-    .sort((a, b) => (a.dueDate?.toMillis() ?? 0) - (b.dueDate?.toMillis() ?? 0));
+    .sort((a, b) => toMillis(a.dueDate, 0) - toMillis(b.dueDate, 0));
 }
 
 function sortByBorrowDateDesc(list: Loan[]) {
-  return list.sort((a, b) => (b.borrowDate?.toMillis() ?? 0) - (a.borrowDate?.toMillis() ?? 0));
+  return list.sort((a, b) => toMillis(b.borrowDate, 0) - toMillis(a.borrowDate, 0));
 }
 
 export async function getLoansByBorrower(borrowerId: string): Promise<Loan[]> {

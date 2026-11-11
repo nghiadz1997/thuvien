@@ -14,6 +14,7 @@ import {
 import { COLLECTIONS } from "@/lib/constants";
 import { col, docRef, newDocRef, snapToData, type Actor } from "@/lib/firestore";
 import type { Book, BookCounts, Transaction, TransactionType } from "@/types";
+import { toMillis } from "@/utils/format";
 import { countsOf } from "@/utils/integrity";
 
 export interface TransactionInput {
@@ -88,10 +89,10 @@ export async function getTransactionsInRange(from: Date, to: Date, max = 500): P
       return snap.docs
         .map((d) => snapToData<Transaction>(d))
         .filter((t) => {
-          const tMs = t.createdAt?.toMillis?.() ?? 0;
+          const tMs = toMillis(t.createdAt, 0);
           return tMs >= fromMs && tMs <= toMs;
         })
-        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+        .sort((a, b) => toMillis(b.createdAt, 0) - toMillis(a.createdAt, 0));
     } catch {
       return [];
     }
@@ -109,7 +110,7 @@ export async function getRecentTransactions(max = 10): Promise<Transaction[]> {
       const snap = await getDocs(query(col(COLLECTIONS.transactions), limit(max)));
       return snap.docs
         .map((d) => snapToData<Transaction>(d))
-        .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+        .sort((a, b) => toMillis(b.createdAt, 0) - toMillis(a.createdAt, 0));
     } catch {
       return [];
     }
@@ -122,7 +123,7 @@ export async function getTransactionsByBook(bookId: string, max = 200): Promise<
   const snap = await getDocs(q);
   return snap.docs
     .map((d) => snapToData<Transaction>(d))
-    .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0))
+    .sort((a, b) => toMillis(b.createdAt, 0) - toMillis(a.createdAt, 0))
     .slice(0, max);
 }
 

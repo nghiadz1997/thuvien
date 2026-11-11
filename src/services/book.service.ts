@@ -14,6 +14,7 @@ import { COLLECTIONS, DEFAULT_SETTINGS } from "@/lib/constants";
 import { getDb, getFirebaseStorage } from "@/lib/firebase";
 import { col, docRef, newDocRef, snapToData, type Actor } from "@/lib/firestore";
 import type { Book, BookCounts, BookStatus } from "@/types";
+import { toMillis } from "@/utils/format";
 import { applyDelta, countsOf } from "@/utils/integrity";
 import { buildSearchText, padNumber } from "@/utils/text";
 import { logInBatch, logInTransaction, newTransactionRef } from "./transaction.service";
@@ -150,7 +151,7 @@ export async function updateBook(bookId: string, changes: BookUpdateInput, actor
       if (value === undefined) continue;
       if (key === "dateAdded") {
         const ts = Timestamp.fromDate(value as Date);
-        if (book.dateAdded?.toMillis() !== ts.toMillis()) {
+        if (toMillis(book.dateAdded, -1) !== ts.toMillis()) {
           update.dateAdded = ts;
           changed.push(FIELD_LABELS.dateAdded);
         }

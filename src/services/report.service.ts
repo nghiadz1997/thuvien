@@ -1,5 +1,5 @@
 import type { Book, Category, Loan, Settings, Transaction } from "@/types";
-import { monthKey, overdueDays, toDate } from "@/utils/format";
+import { monthKey, overdueDays, toDate, toMillis } from "@/utils/format";
 import { checkIntegrity } from "@/utils/integrity";
 
 /**
@@ -229,5 +229,6 @@ export function overdueLoans(activeLoans: Loan[]): (Loan & { lateDays: number })
 }
 
 export function newestBooks(books: Book[], n = 8): Book[] {
-  return [...books].sort((a, b) => (b.createdAt?.toMillis() ?? Date.now()) - (a.createdAt?.toMillis() ?? Date.now())).slice(0, n);
+  const now = Date.now();
+  return [...books].sort((a, b) => toMillis(b.createdAt, now) - toMillis(a.createdAt, now)).slice(0, n);
 }

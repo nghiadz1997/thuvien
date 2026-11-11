@@ -52,7 +52,7 @@ import { COLLECTIONS } from "@/lib/constants";
 import { getDb } from "@/lib/firebase";
 import { col, snapToData } from "@/lib/firestore";
 import { exportExcel, todayStamp } from "@/utils/excel";
-import { formatDate, formatDateTime, formatNumber } from "@/utils/format";
+import { formatDate, formatDateTime, formatNumber, toMillis } from "@/utils/format";
 import { errorMessage } from "@/utils/errors";
 import type { InventoryItem, InventorySession } from "@/types";
 
@@ -98,7 +98,7 @@ export default function InventoryPage() {
       (snap) => {
         const list = snap.docs
           .map((d) => snapToData<InventorySession>(d))
-          .sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0));
+          .sort((a, b) => toMillis(b.createdAt, 0) - toMillis(a.createdAt, 0));
         setSessions(list);
         setLoadingSessions(false);
 
