@@ -15,6 +15,14 @@ export interface BorrowInput {
   note?: string;
 }
 
+export interface BorrowMultipleInput {
+  bookIds: string[];
+  borrowerId: string;
+  borrowDate: Date;
+  dueDate: Date;
+  note?: string;
+}
+
 export type ReturnCondition = "normal" | "damaged" | "lost";
 
 export interface ReturnInput {
@@ -25,99 +33,163 @@ export interface ReturnInput {
 }
 
 /**
- * Mượn sách — Firestore transaction đảm bảo:
- * quantityAvailable giảm, quantityBorrowed tăng, tạo loan, tạo log BORROW.
+ * Mượn nhiều cuốn sách cùng một lúc cho 1 bạn đọc — Firestore transaction đảm bảo:
+ * quantityAvailable giảm, quantityBorrowed tăng cho từng cuốn, tạo loan tương ứng, tạo log BORROW.
  */
-export async function borrowBook(input: BorrowInput, actor: Actor): Promise<string> {
-  if (input.dueDate < input.borrowDate) throw new Error("Hạn trả phải sau ngày mượn.");
+export async function borrowBooks(input: BorrowMultipleInput, actor: Actor): Promise<string[]> {
+  if (!input.bookIds || input.bookIds.length === 0) {
+    throw new Error("Vui lòng chọn ít nhất một cuốn sách để mượn.");
+  }
+  if (input.dueDate < input.borrowDate) {
+    throw new Error("Hạn trả phải sau ngày mượn.");
+  }
 
-  // Kiểm tra trước: người mượn đang mượn chính đầu sách này chưa trả
-  const dup = await getDocs(
+  // Loại bỏ mã trùng trong danh sách mượn (nếu có)
+  const uniqueBookIds = Array.from(new Set(input.bookIds));
+  if (uniqueBookIds.length !== input.bookIds.length) {
+    throw new Error("Danh sách sách mượn có mã sách bị trùng lặp.");
+  }
+
+  // Kiểm tra trước: người mượn đang mượn những cuốn nào chưa trả
+  const dupSnap = await getDocs(
     query(
       col(COLLECTIONS.loans),
       where("borrowerId", "==", input.borrowerId),
-      where("bookId", "==", input.bookId),
       where("status", "==", "borrowing"),
-      limit(1),
     ),
   );
-  if (!dup.empty) throw new Error("Người mượn đang mượn cuốn sách này và chưa trả.");
+  const currentlyBorrowedBookIds = new Set(dupSnap.docs.map((d) => d.data().bookId as string));
+  for (const id of uniqueBookIds) {
+    if (currentlyBorrowedBookIds.has(id)) {
+      throw new Error("Bạn đọc này đang mượn một trong các cuốn sách đã chọn và chưa trả.");
+    }
+  }
 
   const db = getDb();
-  const bookRef = docRef(COLLECTIONS.books, input.bookId);
   const borrowerRef = docRef(COLLECTIONS.borrowers, input.borrowerId);
   const settingsRef = docRef(COLLECTIONS.settings, "general");
-  const loanRef = newDocRef(COLLECTIONS.loans);
-  const txRef = newTransactionRef();
+  const bookRefs = uniqueBookIds.map((id) => docRef(COLLECTIONS.books, id));
+
+  const loanIds: string[] = [];
 
   await runTransaction(db, async (tx) => {
-    const [bookSnap, borrowerSnap, settingsSnap] = await Promise.all([
-      tx.get(bookRef),
+    // 1. Tất cả reads trước
+    const [borrowerSnap, settingsSnap, ...bookSnaps] = await Promise.all([
       tx.get(borrowerRef),
       tx.get(settingsRef),
+      ...bookRefs.map((ref) => tx.get(ref)),
     ]);
-    if (!bookSnap.exists()) throw new Error("Không tìm thấy sách.");
-    if (!borrowerSnap.exists()) throw new Error("Không tìm thấy người mượn.");
-    const book = snapToData<Book>(bookSnap);
-    const borrower = snapToData<Borrower>(borrowerSnap);
-    const settings = { ...DEFAULT_SETTINGS, ...(settingsSnap.exists() ? (settingsSnap.data() as Partial<Settings>) : {}) };
 
-    if (book.status === "locked") throw new Error("Sách đang bị khóa, không thể cho mượn.");
-    if ((book.quantityAvailable ?? 0) <= 0) throw new Error("Hết sách: không còn cuốn nào có sẵn.");
+    if (!borrowerSnap.exists()) throw new Error("Không tìm thấy người mượn.");
+    const borrower = snapToData<Borrower>(borrowerSnap);
     if (borrower.status !== "active") throw new Error("Người mượn đang bị khóa.");
-    if ((borrower.currentBorrowCount ?? 0) >= settings.maxBorrowBooks) {
-      throw new Error(`Người mượn đã mượn tối đa ${settings.maxBorrowBooks} cuốn.`);
+
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      ...(settingsSnap.exists() ? (settingsSnap.data() as Partial<Settings>) : {}),
+    };
+
+    const newTotalBorrowCount = (borrower.currentBorrowCount ?? 0) + uniqueBookIds.length;
+    if (newTotalBorrowCount > settings.maxBorrowBooks) {
+      throw new Error(
+        `Người mượn sẽ vượt quá giới hạn tối đa ${settings.maxBorrowBooks} cuốn (hiện mượn ${borrower.currentBorrowCount ?? 0}, thêm ${uniqueBookIds.length} cuốn).`,
+      );
     }
 
-    const before = countsOf(book);
-    const after = applyDelta(before, { quantityAvailable: -1, quantityBorrowed: 1 });
+    const booksToBorrow: Book[] = [];
+    for (let i = 0; i < bookSnaps.length; i++) {
+      const snap = bookSnaps[i];
+      if (!snap.exists()) {
+        throw new Error(`Không tìm thấy sách với ID: ${uniqueBookIds[i]}.`);
+      }
+      const b = snapToData<Book>(snap);
+      if (b.status === "locked") {
+        throw new Error(`Sách "${b.title}" đang bị khóa, không thể cho mượn.`);
+      }
+      if ((b.quantityAvailable ?? 0) <= 0) {
+        throw new Error(`Đầu sách "${b.title}" đã hết sách có sẵn trên kệ.`);
+      }
+      booksToBorrow.push(b);
+    }
 
-    tx.set(loanRef, {
-      borrowerId: borrower.id,
-      borrowerName: borrower.fullName,
-      borrowerFaculty: borrower.faculty ?? "",
-      bookId: book.id,
-      barcode: book.barcode,
-      bookTitle: book.title,
-      borrowDate: Timestamp.fromDate(input.borrowDate),
-      dueDate: Timestamp.fromDate(input.dueDate),
-      returnDate: null,
-      status: "borrowing" as LoanStatus,
-      overdueDays: 0,
-      note: input.note ?? "",
-      createdBy: actor.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    tx.update(bookRef, {
-      ...after,
-      totalBorrowCount: (book.totalBorrowCount ?? 0) + 1,
-      updatedAt: serverTimestamp(),
-      lastTransactionId: txRef.id,
-    });
-    tx.update(borrowerRef, {
-      currentBorrowCount: (borrower.currentBorrowCount ?? 0) + 1,
-      updatedAt: serverTimestamp(),
-    });
-    logInTransaction(
-      tx,
-      txRef,
-      {
-        type: "BORROW",
-        book,
-        quantity: 1,
-        before,
-        after,
+    // 2. Tất cả writes
+    for (const book of booksToBorrow) {
+      const loanRef = newDocRef(COLLECTIONS.loans);
+      const txRef = newTransactionRef();
+      loanIds.push(loanRef.id);
+
+      const before = countsOf(book);
+      const after = applyDelta(before, { quantityAvailable: -1, quantityBorrowed: 1 });
+
+      tx.set(loanRef, {
         borrowerId: borrower.id,
         borrowerName: borrower.fullName,
         borrowerFaculty: borrower.faculty ?? "",
-        loanId: loanRef.id,
-        note: input.note || `Mượn đến ${input.dueDate.toLocaleDateString("vi-VN")}`,
-      },
-      actor,
-    );
+        bookId: book.id,
+        barcode: book.barcode,
+        bookTitle: book.title,
+        borrowDate: Timestamp.fromDate(input.borrowDate),
+        dueDate: Timestamp.fromDate(input.dueDate),
+        returnDate: null,
+        status: "borrowing" as LoanStatus,
+        overdueDays: 0,
+        note: input.note ?? "",
+        createdBy: actor.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      const bookRef = docRef(COLLECTIONS.books, book.id);
+      tx.update(bookRef, {
+        ...after,
+        totalBorrowCount: (book.totalBorrowCount ?? 0) + 1,
+        updatedAt: serverTimestamp(),
+        lastTransactionId: txRef.id,
+      });
+
+      logInTransaction(
+        tx,
+        txRef,
+        {
+          type: "BORROW",
+          book,
+          quantity: 1,
+          before,
+          after,
+          borrowerId: borrower.id,
+          borrowerName: borrower.fullName,
+          borrowerFaculty: borrower.faculty ?? "",
+          loanId: loanRef.id,
+          note: input.note || `Mượn đến ${input.dueDate.toLocaleDateString("vi-VN")}`,
+        },
+        actor,
+      );
+    }
+
+    tx.update(borrowerRef, {
+      currentBorrowCount: newTotalBorrowCount,
+      updatedAt: serverTimestamp(),
+    });
   });
-  return loanRef.id;
+
+  return loanIds;
+}
+
+/**
+ * Mượn 1 cuốn sách (tương thích ngược)
+ */
+export async function borrowBook(input: BorrowInput, actor: Actor): Promise<string> {
+  const ids = await borrowBooks(
+    {
+      bookIds: [input.bookId],
+      borrowerId: input.borrowerId,
+      borrowDate: input.borrowDate,
+      dueDate: input.dueDate,
+      note: input.note,
+    },
+    actor,
+  );
+  return ids[0];
 }
 
 /**

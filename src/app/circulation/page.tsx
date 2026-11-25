@@ -19,8 +19,10 @@ import {
   Search,
   ShieldAlert,
   Sparkles,
+  Trash2,
   User,
   Users,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/layout/AppShell";
@@ -37,7 +39,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useActiveLoans, useBooks, useBorrowers, useSettings } from "@/hooks/useRealtime";
 import { useBookLookup } from "@/hooks/useBookLookup";
 import { useTable } from "@/hooks/useTable";
-import { borrowBook, getActiveLoansByBook, returnBook, type ReturnCondition } from "@/services/loan.service";
+import { borrowBook, borrowBooks, getActiveLoansByBook, returnBook, type ReturnCondition } from "@/services/loan.service";
 import { exportExcel, todayStamp } from "@/utils/excel";
 import { addDays, formatDate, fromInputDate, overdueDays, toInputDate } from "@/utils/format";
 import { errorMessage } from "@/utils/errors";
@@ -71,7 +73,7 @@ function CirculationContent() {
   // TAB 1: MƯỢN SÁCH (BORROW)
   // ==========================================
   const borrowScannerRef = useRef<BarcodeScannerInputHandle>(null);
-  const [borrowBookItem, setBorrowBookItem] = useState<Book | null>(null);
+  const [borrowBookItems, setBorrowBookItems] = useState<Book[]>([]);
   const [selectedBorrowerId, setSelectedBorrowerId] = useState("");
   const [borrowerSearch, setBorrowerSearch] = useState("");
   const [borrowDate, setBorrowDate] = useState(toInputDate(new Date()));
@@ -85,6 +87,31 @@ function CirculationContent() {
       setDueDate(toInputDate(addDays(new Date(), settings.defaultBorrowDays)));
     }
   }, [settings.defaultBorrowDays]);
+
+  const filteredBorrowers = useMemo(() => {
+    if (!borrowerSearch.trim()) return borrowers.filter((b) => b.status === "active");
+    return borrowers.filter(
+      (b) =>
+        b.status === "active" &&
+        matchesSearch(`${b.fullName} ${b.borrowerCode} ${b.studentCode} ${b.className} ${b.faculty}`, borrowerSearch),
+    );
+  }, [borrowers, borrowerSearch]);
+
+  const selectedBorrower = useMemo(() => {
+    return borrowers.find((b) => b.id === selectedBorrowerId);
+  }, [borrowers, selectedBorrowerId]);
+
+  // Kiểm tra các cuốn sách trong danh sách mà bạn đọc này đang mượn chưa trả
+  const duplicateBorrowedBooks = useMemo(() => {
+    if (!selectedBorrower) return [];
+    return borrowBookItems.filter((b) =>
+      activeLoans.some((l) => l.borrowerId === selectedBorrower.id && l.bookId === b.id && l.status === "borrowing"),
+    );
+  }, [selectedBorrower, borrowBookItems, activeLoans]);
+
+  const borrowerCurrentCount = selectedBorrower?.currentBorrowCount ?? 0;
+  const totalAfterBorrow = borrowerCurrentCount + borrowBookItems.length;
+  const isExceedingLimit = Boolean(selectedBorrower && totalAfterBorrow > settings.maxBorrowBooks);
 
   const handleScanBorrowBook = async (code: string) => {
     const b = await lookupBook(code);
@@ -100,32 +127,55 @@ function CirculationContent() {
       toast.error(`Đầu sách "${b.title}" đã HẾT sách có sẵn trên kệ (0/${b.quantityTotal})`);
       return false;
     }
-    setBorrowBookItem(b);
-    toast.success(`Đã chọn sách: ${b.title}`);
+    // Kiểm tra xem đã có trong danh sách quét chưa
+    if (borrowBookItems.some((item) => item.id === b.id)) {
+      toast.warning(`Sách "${b.title}" đã có trong danh sách chờ mượn!`);
+      return true;
+    }
+    // Kiểm tra giới hạn mượn nếu đã chọn bạn đọc
+    if (selectedBorrower) {
+      const alreadyBorrowedThisBook = activeLoans.some(
+        (l) => l.borrowerId === selectedBorrower.id && l.bookId === b.id && l.status === "borrowing",
+      );
+      if (alreadyBorrowedThisBook) {
+        toast.error(`Bạn đọc "${selectedBorrower.fullName}" đang mượn cuốn "${b.title}" chưa trả!`);
+        return false;
+      }
+      if (borrowerCurrentCount + borrowBookItems.length + 1 > settings.maxBorrowBooks) {
+        toast.error(
+          `Vượt quá giới hạn (${settings.maxBorrowBooks} cuốn). Bạn đọc này đang mượn ${borrowerCurrentCount} cuốn và đã chọn ${borrowBookItems.length} cuốn.`,
+        );
+        return false;
+      }
+    }
+    setBorrowBookItems((prev) => [...prev, b]);
+    toast.success(`Đã thêm sách: ${b.title} (Tổng: ${borrowBookItems.length + 1} cuốn)`);
     return true;
   };
 
-  const filteredBorrowers = useMemo(() => {
-    if (!borrowerSearch.trim()) return borrowers.filter((b) => b.status === "active");
-    return borrowers.filter(
-      (b) =>
-        b.status === "active" &&
-        matchesSearch(`${b.fullName} ${b.borrowerCode} ${b.studentCode} ${b.className} ${b.faculty}`, borrowerSearch),
-    );
-  }, [borrowers, borrowerSearch]);
+  const handleRemoveBorrowBook = (bookId: string) => {
+    setBorrowBookItems((prev) => prev.filter((b) => b.id !== bookId));
+  };
 
-  const selectedBorrower = useMemo(() => {
-    return borrowers.find((b) => b.id === selectedBorrowerId);
-  }, [borrowers, selectedBorrowerId]);
+  const handleClearBorrowBooks = () => {
+    setBorrowBookItems([]);
+    borrowScannerRef.current?.focus();
+  };
 
   const handleExecuteBorrow = async (e: FormEvent) => {
     e.preventDefault();
-    if (!borrowBookItem || !selectedBorrower || !actor) {
-      toast.error("Vui lòng quét sách và chọn người mượn");
+    if (borrowBookItems.length === 0 || !selectedBorrower || !actor) {
+      toast.error("Vui lòng quét ít nhất một cuốn sách và chọn người mượn");
       return;
     }
-    if (selectedBorrower.currentBorrowCount >= settings.maxBorrowBooks) {
-      toast.error(`Người mượn đã đạt giới hạn tối đa ${settings.maxBorrowBooks} cuốn`);
+    if (selectedBorrower.currentBorrowCount + borrowBookItems.length > settings.maxBorrowBooks) {
+      toast.error(
+        `Người mượn vượt quá giới hạn tối đa ${settings.maxBorrowBooks} cuốn (hiện mượn ${selectedBorrower.currentBorrowCount} cuốn, thêm ${borrowBookItems.length} cuốn)`,
+      );
+      return;
+    }
+    if (duplicateBorrowedBooks.length > 0) {
+      toast.error(`Bạn đọc đang mượn cuốn "${duplicateBorrowedBooks[0].title}" chưa trả!`);
       return;
     }
     const bDate = fromInputDate(borrowDate) || new Date();
@@ -137,9 +187,9 @@ function CirculationContent() {
 
     setSubmittingBorrow(true);
     try {
-      await borrowBook(
+      await borrowBooks(
         {
-          bookId: borrowBookItem.id,
+          bookIds: borrowBookItems.map((b) => b.id),
           borrowerId: selectedBorrower.id,
           borrowDate: bDate,
           dueDate: dDate,
@@ -147,10 +197,10 @@ function CirculationContent() {
         },
         actor,
       );
-      toast.success(`Cho mượn thành công cuốn "${borrowBookItem.title}" cho ${selectedBorrower.fullName}`);
+      toast.success(`Cho mượn thành công ${borrowBookItems.length} cuốn sách cho ${selectedBorrower.fullName}`);
 
       // Reset
-      setBorrowBookItem(null);
+      setBorrowBookItems([]);
       setSelectedBorrowerId("");
       setBorrowerSearch("");
       setBorrowNote("");
@@ -326,33 +376,84 @@ function CirculationContent() {
           <div className="space-y-4">
             <Card>
               <CardHeader
-                title="1. Quét mã vạch sách"
-                description="Hướng máy quét vào mã vạch sách hoặc gõ mã"
+                title={`1. Quét mã sách (${borrowBookItems.length} cuốn)`}
+                description="Hướng máy quét vào mã vạch/QR hoặc gõ mã (quét liên tiếp nhiều cuốn)"
                 icon={<ScanBarcode className="h-5 w-5 text-blue-600" />}
+                actions={
+                  borrowBookItems.length > 0 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearBorrowBooks}
+                      className="text-red-600 hover:bg-red-50 hover:text-red-700 h-8 px-2 text-xs"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Xóa tất cả
+                    </Button>
+                  ) : undefined
+                }
               />
               <CardBody className="space-y-4">
                 <BarcodeScannerInput
                   ref={borrowScannerRef}
                   onScan={handleScanBorrowBook}
-                  placeholder="Quét mã vạch sách cần cho mượn..."
-                  keepFocus={!borrowBookItem}
+                  placeholder="Quét mã vạch / QR sách (quét liên tiếp nhiều cuốn)..."
+                  keepFocus={true}
+                  continuousCamera={true}
                 />
 
-                {borrowBookItem ? (
-                  <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-xs space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-bold text-sm text-slate-900">{borrowBookItem.title}</p>
-                        <p className="text-blue-700 font-mono">Mã: {borrowBookItem.bookCode} • Barcode: {borrowBookItem.barcode}</p>
-                        <p className="text-slate-600">Tác giả: {borrowBookItem.author || "—"}</p>
-                        <p className="text-slate-600">Vị trí kệ: {borrowBookItem.shelfLocation || "—"}</p>
-                      </div>
-                      <Badge color="green">Sẵn sàng ({borrowBookItem.quantityAvailable} cuốn)</Badge>
+                {borrowBookItems.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-medium text-slate-500 px-1">
+                      <span>Danh sách sách đã quét ({borrowBookItems.length} cuốn)</span>
+                      <span className="text-[11px] text-blue-600 font-normal">Sẵn sàng quét thêm cuốn tiếp theo</span>
+                    </div>
+                    <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1">
+                      {borrowBookItems.map((book, idx) => (
+                        <div
+                          key={book.id}
+                          className="flex items-start justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs transition-all hover:bg-blue-50"
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <div className="min-w-0 space-y-0.5">
+                              <p className="font-bold text-sm text-slate-900 truncate">{book.title}</p>
+                              <p className="font-mono text-blue-700 text-[11px]">
+                                Mã: {book.bookCode} {book.barcode ? `• Barcode: ${book.barcode}` : ""}
+                              </p>
+                              <p className="text-slate-600 text-[11px]">
+                                Tác giả: {book.author || "—"} {book.shelfLocation ? `• Kệ: ${book.shelfLocation}` : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            <Badge color="green">
+                              Còn {book.quantityAvailable}
+                            </Badge>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveBorrowBook(book.id)}
+                              className="rounded p-1 text-slate-400 hover:bg-red-100 hover:text-red-600 transition-colors"
+                              title="Bỏ sách này khỏi danh sách mượn"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
                   <div className="py-8 text-center text-slate-400 text-xs">
-                    Vui lòng quét mã vạch trên cuốn sách để bắt đầu lập phiếu mượn.
+                    <BookOpen className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+                    Vui lòng quét mã vạch hoặc mã QR trên các cuốn sách cần cho mượn.
+                    <br />
+                    <span className="text-slate-400 text-[11px]">
+                      (Hỗ trợ quét liên tiếp nhiều cuốn khác mã nhau cùng một lúc)
+                    </span>
                   </div>
                 )}
               </CardBody>
@@ -399,14 +500,37 @@ function CirculationContent() {
                   </div>
 
                   {selectedBorrower && (
-                    <div className="rounded-lg bg-slate-50 p-3 text-xs space-y-1">
+                    <div className="rounded-lg bg-slate-50 p-3 text-xs space-y-1.5 border border-slate-200">
                       <p className="font-semibold text-slate-800">
                         {selectedBorrower.fullName} • MSSV/Mã: {selectedBorrower.studentCode || selectedBorrower.borrowerCode}
                       </p>
                       <p className="text-slate-600">Lớp: {selectedBorrower.className || "—"} • Khoa: {selectedBorrower.faculty || "—"}</p>
-                      <p className="text-slate-600">
-                        Đang mượn: <strong>{selectedBorrower.currentBorrowCount}</strong> / {settings.maxBorrowBooks} cuốn
+                      <p className="text-slate-700">
+                        Đang mượn: <strong>{borrowerCurrentCount}</strong> cuốn
+                        {borrowBookItems.length > 0 && (
+                          <span>
+                            {" "}+ Mượn thêm: <strong className="text-blue-600">{borrowBookItems.length}</strong> cuốn ={" "}
+                            <strong className={isExceedingLimit ? "text-red-600" : "text-emerald-600"}>
+                              {totalAfterBorrow}
+                            </strong>
+                            /{settings.maxBorrowBooks} cuốn
+                          </span>
+                        )}
                       </p>
+
+                      {isExceedingLimit && (
+                        <div className="flex items-center gap-1.5 text-red-600 font-medium pt-1">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span>Vượt quá hạn mức tối đa {settings.maxBorrowBooks} cuốn của bạn đọc!</span>
+                        </div>
+                      )}
+
+                      {duplicateBorrowedBooks.length > 0 && (
+                        <div className="flex items-center gap-1.5 text-amber-700 font-medium pt-1">
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          <span>Bạn đọc đang mượn cuốn &quot;{duplicateBorrowedBooks.map((b) => b.title).join(", ")}&quot; chưa trả!</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -444,9 +568,16 @@ function CirculationContent() {
                       className="w-full"
                       size="lg"
                       loading={submittingBorrow}
-                      disabled={!borrowBookItem || !selectedBorrower}
+                      disabled={
+                        borrowBookItems.length === 0 ||
+                        !selectedBorrower ||
+                        isExceedingLimit ||
+                        duplicateBorrowedBooks.length > 0
+                      }
                     >
-                      Xác nhận cho mượn sách
+                      {borrowBookItems.length > 0
+                        ? `Xác nhận cho mượn (${borrowBookItems.length} cuốn)`
+                        : "Xác nhận cho mượn sách"}
                     </Button>
                   </div>
                 </form>

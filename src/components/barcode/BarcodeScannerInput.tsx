@@ -30,6 +30,8 @@ export interface BarcodeScannerInputProps {
   autoSubmitWithoutEnter?: boolean;
   /** Hiển thị nút quét bằng Camera điện thoại / Laptop */
   showCameraBtn?: boolean;
+  /** Giữ camera mở để quét liên tiếp nhiều mã (hữu ích khi mượn/kiểm kê nhiều cuốn) */
+  continuousCamera?: boolean;
   disabled?: boolean;
   sound?: boolean;
   size?: "md" | "lg";
@@ -53,6 +55,7 @@ export const BarcodeScannerInput = forwardRef<BarcodeScannerInputHandle, Barcode
     duplicateCooldownMs = 1500,
     autoSubmitWithoutEnter = true,
     showCameraBtn = true,
+    continuousCamera = false,
     disabled,
     sound = true,
     size = "lg",
@@ -227,7 +230,7 @@ export const BarcodeScannerInput = forwardRef<BarcodeScannerInputHandle, Barcode
         open={cameraModalOpen}
         onClose={() => setCameraModalOpen(false)}
         onScan={submit}
-        continuous={false}
+        continuous={continuousCamera}
       />
     </div>
   );
